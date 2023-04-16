@@ -1,6 +1,5 @@
 import sqlite3
 import logging
-import time
 import os
 from dotenv import load_dotenv
 from telegram import Update
@@ -17,6 +16,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
@@ -29,12 +29,14 @@ def init_db():
                        closed_by INTEGER)''')
         conn.commit()
 
+
 def insert_thread(thread_id, user_id, status):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         cur.execute("INSERT INTO threads (id, user_id, status, date_opened) VALUES (?, ?, ?, datetime('now'))",
                     (thread_id, user_id, status))
         conn.commit()
+
 
 def update_thread_status(thread_id, status, closed_by=None):
     with sqlite3.connect(DB_FILE) as conn:
@@ -46,6 +48,7 @@ def update_thread_status(thread_id, status, closed_by=None):
             cur.execute("UPDATE threads SET status = ? WHERE id = ?", (status, thread_id))
         conn.commit()
 
+
 def find_thread(user_id, status):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
@@ -53,12 +56,17 @@ def find_thread(user_id, status):
         result = cur.fetchone()
     return result if result else None
 
+
 async def create_thread(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _topic = await context.bot.createForumTopic(TELEGRAM_SUPPORT_CHAT_ID, name=update.effective_user.username)
+    first_name = update.effective_user.first_name
+    last_name = update.effective_user.last_name
+    thread_name = f"{first_name} {last_name}"
+    _topic = await context.bot.createForumTopic(TELEGRAM_SUPPORT_CHAT_ID, name=thread_name)
     _thread_id = int(_topic.message_thread_id)
     _user_id = update.effective_user.id
     insert_thread(_thread_id, _user_id, status="open")
     return _thread_id
+
 
 async def forward_to_support_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     thread_info = find_thread(update.effective_user.id, status="open")
@@ -71,6 +79,7 @@ async def forward_to_support_chat(update: Update, context: ContextTypes.DEFAULT_
     await context.bot.forward_message(chat_id=TELEGRAM_SUPPORT_CHAT_ID, from_chat_id=update.effective_chat.id,
                                       message_id=update.effective_message.message_id, message_thread_id=_thread_id)
 
+
 async def forward_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _thread_id = str(update.effective_message.message_thread_id)
     if _thread_id != 'None':
@@ -81,6 +90,7 @@ async def forward_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
+
 
 async def close_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _thread_id = str(update.effective_message.message_thread_id)
@@ -98,6 +108,7 @@ async def close_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                text="Your ticket has been closed by a support person. "
                                                     "Press /open to continue if the issue is not resolved. "
                                                     "Write a message to open a new ticket.")
+
 
 async def open_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not find_thread(update.effective_user.id, status="open"):
@@ -119,6 +130,7 @@ async def open_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_user.id, text="You already have an open ticket. "
                                                                               "Write a message to continue.")
 
+
 def main():
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
@@ -136,6 +148,7 @@ def main():
     application.add_handler(chat_message_handler)
 
     application.run_polling()
+
 
 # Initialize database
 init_db()
